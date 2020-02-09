@@ -72,7 +72,7 @@ parseNfa = do
     accepting <- S.fromList <$> sepBy smallNat spaces
     newline'
     transitions <- transitionTableList
-    return $ Nfa numStates alphSize accepting transitions
+    return $ nfa (S.singleton 0) numStates alphSize accepting transitions
   where
     transitionLine :: Parser (Map (Maybe Char) (Set Int))
     transitionLine =
