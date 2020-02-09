@@ -19,7 +19,7 @@ import           Text.Parser.Token
 import           Text.Trifecta.Parser
 import           Text.Trifecta.Result
 
-eof' :: Parser (Map Char (Set Int))
+eof' :: Parser (Map (Maybe Char) (Set Int))
 eof' = eof >> return M.empty
 
 newline' :: Parser String
@@ -60,7 +60,7 @@ parseSet p = do
     string "}"
     return result
 
-parseNfa :: Parser Nfa
+parseNfa :: Parser (Nfa Char Int)
 parseNfa = do
     text "Number of states: "
     numStates <- smallNat
@@ -74,10 +74,10 @@ parseNfa = do
     transitions <- transitionTableList
     return $ Nfa numStates alphSize accepting transitions
   where
-    transitionLine :: Parser (Map Char (Set Int))
+    transitionLine :: Parser (Map (Maybe Char) (Set Int))
     transitionLine =
         M.fromList <$> zip globalAlphabet <$> sepBy1 (parseSet smallNat) spaces
-    transitionTableList :: Parser (Map (Int, Char) (Set Int))
+    transitionTableList :: Parser (Map (Int, Maybe Char) (Set Int))
     transitionTableList = do
         indexedMaps <- zip [0 ..] <$> sepBy1 (transitionLine <|> eof') (newline)
         let stateMaps = map (\(state, m) -> M.mapKeys (state, ) m) indexedMaps

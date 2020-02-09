@@ -8,35 +8,37 @@ import           Data.Set        (Set)
 import qualified Data.Set        as S
 import           Debug.Trace     (trace)
 
-readCharEps :: (Int, Char) -> Nfa -> Set Int
+readCharEps :: (Ord a, Ord s) => (s, Maybe a) -> Nfa a s -> Set s
 readCharEps (state, char) nfa =
     S.fromList $ do
-        states <- state : (S.toList $ (transitions nfa) M.! (state, ' '))
+        states <- state : (S.toList $ (transitions nfa) M.! (state, Nothing))
         S.toList $ (transitions nfa) M.! (states, char)
 
-readChar :: (Int, Char) -> Nfa -> Set Int
+readChar :: (Ord a, Ord s) => (s, Maybe a) -> Nfa a s -> Set s
 readChar (state, char) nfa = (transitions nfa) M.! (state, char)
 
-simulate :: String -> Nfa -> Bool
+simulate :: (Ord a, Enum s, Ord s) => [a] -> Nfa a s -> Bool
 simulate s n = not . null $ simulate' s n `S.intersection` accepting n
 
-simulate' :: String -> Nfa -> Set Int
-simulate' s = S.fromList . simulateHelp (0, s)
+simulate' :: (Ord a, Enum s, Ord s) => [a] -> Nfa a s -> Set s
+simulate' s = S.fromList . simulateHelp (toEnum 0, s)
 
-simulateHelp :: (Int, String) -> Nfa -> [Int]
+simulateHelp :: (Ord a, Ord s) => (s, [a]) -> Nfa a s -> [s]
 simulateHelp (state, []) nfa = do
-    state : (S.toList $ readCharEps (state, ' ') nfa)
+    state : (S.toList $ readCharEps (state, Nothing) nfa)
 simulateHelp (state, c:cs) nfa = do
-    nextState <- S.toList $ readCharEps (state, c) nfa
+    nextState <- S.toList $ readCharEps (state, Just c) nfa
     simulateHelp (nextState, cs) nfa
 
-epsilonRemoval :: Nfa -> Nfa
+epsilonRemoval :: (Alphabetical a, Ord a, Enum s, Ord s) => Nfa a s -> Nfa a s
 epsilonRemoval n = do
     let oneEpsFinals -- Step 2
          =
             [ (q, r)
             | q <- S.toList $ notInFinal n
-            , r <- S.toList $ (readChar (q, ' ') n) `S.intersection` accepting n
+            , r <-
+                  S.toList $
+                  (readChar (q, Nothing) n) `S.intersection` accepting n
             ]
     let newAccepts =
             (accepting n) `S.union` (S.fromList . map fst $ oneEpsFinals)
@@ -47,7 +49,7 @@ epsilonRemoval n = do
                 [ ((q, a), S.singleton s)
                 | q <- stateList n
                 , a <- alphabet n
-                , r <- S.toList $ readChar (q, ' ') n
+                , r <- S.toList $ readChar (q, Nothing) n
                 , s <- S.toList $ readChar (r, a) n
                 , s `S.notMember` (readChar (q, a) n)
                 ]
@@ -57,6 +59,6 @@ epsilonRemoval n = do
             foldr
                 (\k m -> M.adjust (const S.empty) k m)
                 transitionsAlt1
-                (map (, ' ') (stateList n))
+                (map (, Nothing) (stateList n))
         nextNfa = Nfa (numStates n) (alphSize n) newAccepts transitionsAlt2
     nextNfa

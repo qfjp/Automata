@@ -1,7 +1,7 @@
 module Data.Nfa
-    ( Nfa(..)
+    ( Alphabetical(..)
+    , Nfa(..)
     , alphabet
-    , globalAlphabet
     , notInFinal
     , printNfa
     , stateList
@@ -12,25 +12,28 @@ import qualified Data.Map.Strict as M
 import           Data.Set        (Set)
 import qualified Data.Set        as S
 
-globalAlphabet :: String
-globalAlphabet = " abcdefghijklmnopqrstuvwxyz"
+class Alphabetical a where
+    globalAlphabet :: [Maybe a]
 
-data Nfa =
+instance Alphabetical Char where
+    globalAlphabet = Nothing : (map Just "abcdefghijklmnopqrstuvwxyz")
+
+data Nfa a s =
     Nfa
         { numStates :: Int
         , alphSize :: Int
-        , accepting :: Set Int
-        , transitions :: Map (Int, Char) (Set Int)
+        , accepting :: Set s
+        , transitions :: Map (s, Maybe a) (Set s)
         }
     deriving (Show, Eq)
 
-alphabet :: Nfa -> String
+alphabet :: Alphabetical a => Nfa a s -> [Maybe a]
 alphabet n = take (1 + alphSize n) globalAlphabet
 
-stateList :: Nfa -> [Int]
-stateList n = [0 .. numStates n - 1]
+stateList :: Enum s => Nfa a s -> [s]
+stateList n = map toEnum [0 .. numStates n - 1]
 
-notInFinal :: Nfa -> Set Int
+notInFinal :: (Enum s, Ord s) => Nfa a s -> Set s
 notInFinal n = (S.fromList (stateList n)) `S.difference` (accepting n)
 
 sepList :: Show a => String -> [a] -> String
@@ -41,7 +44,7 @@ sepList sep l =
   where
     maybeList = foldr (\x l -> (show x) ++ sep ++ l) [] l
 
-printTransitions :: Nfa -> [String]
+printTransitions :: (Enum s, Ord s, Show s) => Nfa Char s -> [String]
 printTransitions n =
     let keys = [(q, a) | q <- stateList n, a <- alphabet n]
         sets' = [(transitions n) M.! (q, a) | q <- stateList n, a <- alphabet n]
@@ -58,7 +61,7 @@ groupBy size lst =
 printSet :: Show a => Set a -> String
 printSet s = "{" ++ sepList "," (S.toList s) ++ "}"
 
-printNfa :: Nfa -> String
+printNfa :: (Enum s, Ord s, Show s) => Nfa Char s -> String
 printNfa n =
     "Number of states: " ++
     (show $ numStates n) ++
