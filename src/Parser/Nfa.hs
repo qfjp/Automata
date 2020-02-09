@@ -77,7 +77,7 @@ parseNfa = do
     transitionLine :: Parser (Map (Maybe Char) (Set Int))
     transitionLine =
         M.fromList <$> zip globalAlphabet <$> sepBy1 (parseSet smallNat) spaces
-    transitionTableList :: Parser (Map (Int, Maybe Char) (Set Int))
+    transitionTableList :: Parser (TransType Char Int)
     transitionTableList = do
         indexedMaps <- zip [0 ..] <$> sepBy1 (transitionLine <|> eof') (newline)
         let stateMaps = map (\(state, m) -> M.mapKeys (state, ) m) indexedMaps

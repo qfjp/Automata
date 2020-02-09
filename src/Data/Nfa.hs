@@ -1,6 +1,7 @@
 module Data.Nfa
     ( Alphabetical(..)
     , Nfa
+    , TransType
     , accepting
     , alphabet
     , alphSize
@@ -25,6 +26,8 @@ class Alphabetical a where
 instance Alphabetical Char where
     globalAlphabet = Nothing : (map Just "abcdefghijklmnopqrstuvwxyz")
 
+type TransType a s = Map (s, Maybe a) (Set s)
+
 -- TODO: Change model to multi-start state Nfa
 data RawNfa a s =
     RawNfa
@@ -32,7 +35,7 @@ data RawNfa a s =
         , _numStates :: Int
         , _alphSize :: Int
         , _accepting :: Set s
-        , _transitions :: Map (s, Maybe a) (Set s)
+        , _transitions :: TransType a s
         }
     deriving (Show, Eq)
 
@@ -72,13 +75,10 @@ data Nfa a s where
 instance (Ord a, Show a, Enum s, Ord s, Show s) => Show (Nfa a s) where
     show = drop 3 . show . run
 
-nfa :: Ord s
-    => Set s
-    -> Int
-    -> Int
-    -> Set s
-    -> Map (s, Maybe a) (Set s)
-    -> Nfa a s
+instance (Eq a, Ord a, Enum s, Eq s, Ord s) => Eq (Nfa a s) where
+    x == y = (run x) == (run y)
+
+nfa :: Ord s => Set s -> Int -> Int -> Set s -> TransType a s -> Nfa a s
 nfa starts nStates aSize accepts trans =
     Prim $
     RawNfa
@@ -119,7 +119,7 @@ alphSize = _alphSize . run
 accepting :: (Ord a, Enum s, Ord s) => Nfa a s -> Set s
 accepting = _accepting . run
 
-transitions :: (Ord a, Enum s, Ord s) => Nfa a s -> Map (s, Maybe a) (Set s)
+transitions :: (Ord a, Enum s, Ord s) => Nfa a s -> TransType a s
 transitions = _transitions . run
 
 startSet :: (Ord a, Enum s, Ord s) => Nfa a s -> Set s

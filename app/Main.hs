@@ -6,7 +6,6 @@ import           Data.Text            (Text, unpack)
 import           NfaAlg
 import           Parser.Nfa
 import           System.Environment   (getArgs, getProgName)
-import           System.IO            (hPutStrLn, stderr)
 import           Text.RawString.QQ
 import           Text.Trifecta.Parser (parseFromFile)
 
@@ -39,7 +38,6 @@ conversionEngine fpath = do
             Nothing -> return ()
             Just nfa -> do
                 putStrLn . init . printNfa . epsilonRemoval $ nfa
-                hPutStrLn stderr . printNfa . epsilonRemoval $ nfa
 
 simulationEngine :: String -> IO ()
 simulationEngine fpath = do

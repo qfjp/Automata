@@ -32,6 +32,7 @@ default-extensions:
   - QuasiQuotes
   - TupleSections
   - GADTs
+  - ScopedTypeVariables
 
 library:
   source-dirs: src
