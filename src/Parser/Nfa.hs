@@ -4,29 +4,35 @@ module Parser.Nfa
     , parseT
     ) where
 
-import           Control.Applicative     ((<|>))
-import           Data.Char               (isSpace)
 import           Data.Map.Strict         (Map)
 import qualified Data.Map.Strict         as M
-import           Data.Nfa
 import           Data.Set                (Set)
 import qualified Data.Set                as S
 import           Data.Text               (Text)
 import qualified Data.Text               as T
+
+import           Control.Applicative     ((<|>))
+import           Data.Char               (isSpace)
 import           Text.Parser.Char        hiding (spaces)
 import           Text.Parser.Combinators
 import           Text.Parser.Token
 import           Text.Trifecta.Parser
 import           Text.Trifecta.Result
 
-eof' :: Parser (Map (Maybe Char) (Set Int))
+import           Data.FiniteNat
+import           Data.Nfa
+
+eof' :: Parser (Map (Maybe Char) (Set FiniteNat))
 eof' = eof >> return M.empty
 
 newline' :: Parser String
 newline' = newline >> return "\n"
 
-smallNat :: Parser Int
+smallNat :: Parser FiniteNat
 smallNat = read <$> some digit
+
+smallInt :: Parser Int
+smallInt = read <$> some digit
 
 spaces :: Parser String
 spaces = some (satisfy isSpaceNoNewline) <|> pure ""
@@ -60,13 +66,13 @@ parseSet p = do
     string "}"
     return result
 
-parseNfa :: Parser (Nfa Char Int)
+parseNfa :: Parser (Nfa Char FiniteNat)
 parseNfa = do
     text "Number of states: "
-    numStates <- smallNat
+    numStates <- smallInt
     newline'
     text "Alphabet size: "
-    alphSize <- smallNat
+    alphSize <- smallInt
     newline'
     text "Accepting states: "
     accepting <- S.fromList <$> sepBy smallNat spaces
@@ -74,10 +80,10 @@ parseNfa = do
     transitions <- transitionTableList
     return $ nfa (S.singleton 0) numStates alphSize accepting transitions
   where
-    transitionLine :: Parser (Map (Maybe Char) (Set Int))
+    transitionLine :: Parser (Map (Maybe Char) (Set FiniteNat))
     transitionLine =
         M.fromList <$> zip globalAlphabet <$> sepBy1 (parseSet smallNat) spaces
-    transitionTableList :: Parser (TransType Char Int)
+    transitionTableList :: Parser (TransType Char FiniteNat)
     transitionTableList = do
         indexedMaps <- zip [0 ..] <$> sepBy1 (transitionLine <|> eof') (newline)
         let stateMaps = map (\(state, m) -> M.mapKeys (state, ) m) indexedMaps
