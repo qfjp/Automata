@@ -19,21 +19,19 @@ fixWith f init =
             then x
             else fixWith f x
 
-epsClosureState :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> s -> Set s
+epsClosureState :: (Ord a, Ord s) => Nfa a s -> s -> Set s
 epsClosureState n state = S.insert state $ transitions n M.! (state, Nothing)
 
-epsClosureOnce :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s -> Set s
+epsClosureOnce :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
 epsClosureOnce n = S.foldl' (\epsClos state -> epsClosureState n state) S.empty
 
-epsClosure :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s -> Set s
+epsClosure :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
 epsClosure n = fixWith (\s -> s `S.union` epsClosureOnce n s)
 
-readChar ::
-       (Ord a, Bounded s, Enum s, Ord s) => s -> Maybe a -> Nfa a s -> Set s
+readChar :: (Ord a, Ord s) => s -> Maybe a -> Nfa a s -> Set s
 readChar state = readCharOnSet (S.singleton state)
 
-readCharOnSet ::
-       (Ord a, Bounded s, Enum s, Ord s) => Set s -> Maybe a -> Nfa a s -> Set s
+readCharOnSet :: (Ord a, Ord s) => Set s -> Maybe a -> Nfa a s -> Set s
 readCharOnSet states' char nfa =
     close $ S.foldl (\set state -> set `S.union` readOne state) S.empty states
   where
@@ -41,15 +39,15 @@ readCharOnSet states' char nfa =
     close = epsClosure nfa
     states = close states'
 
-simulate :: (Ord a, Bounded s, Enum s, Ord s) => [a] -> Nfa a s -> Bool
+simulate :: (Ord a, Ord s) => [a] -> Nfa a s -> Bool
 simulate s n = not . null $ simulate' s n `S.intersection` accepting n
 
-simulate' :: (Ord a, Bounded s, Enum s, Ord s) => [a] -> Nfa a s -> Set s
+simulate' :: (Ord a, Ord s) => [a] -> Nfa a s -> Set s
 simulate' str nfa =
     foldl' (\set char -> readCharOnSet set (Just char) nfa) (startSet nfa) str
 
 epsilonRemoval ::
-       forall a s. (Ord a, Bounded s, Enum s, Ord s)
+       forall a s. (Ord a, Ord s)
     => Nfa a s
     -> Nfa a s
 epsilonRemoval n =
@@ -63,10 +61,10 @@ epsilonRemoval n =
                 epsKeys
      in nfa (startSet n) (stateSet n) (alphabet n) newAccepts emptyEps
 
-pureTrans :: (Ord a, Enum s, Ord s) => TransType a s -> s -> Maybe a -> Set s
+pureTrans :: (Ord a, Ord s) => TransType a s -> s -> Maybe a -> Set s
 pureTrans trans state char = trans M.! (state, char)
 
-updateF :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s -> Set s
+updateF :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
 updateF nfa accepts =
     let qs =
             [ q
@@ -77,11 +75,7 @@ updateF nfa accepts =
      in accepts `S.union`
         foldl' (\set state -> set `S.union` S.singleton state) S.empty qs
 
-updateTrans ::
-       (Ord a, Bounded s, Enum s, Ord s)
-    => Nfa a s
-    -> TransType a s
-    -> TransType a s
+updateTrans :: (Ord a, Ord s) => Nfa a s -> TransType a s -> TransType a s
 updateTrans nfa trans =
     let qASs =
             [ ((q, a), s)
