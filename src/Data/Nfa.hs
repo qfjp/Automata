@@ -1,7 +1,8 @@
 module Data.Nfa
     ( Nfa
     , TransType
-    , bind'
+    , union
+    , empty
     , accepting
     , alphabet
     , alphSize
@@ -85,6 +86,12 @@ instance (Ord a, Show a, Ord s, Show s) => Show (Nfa a s) where
 instance (Eq a, Ord a, Eq s, Ord s) => Eq (Nfa a s) where
     x == y = (run x) == (run y)
 
+instance (Ord a, Ord s) => Ord (Nfa a s) where
+    compare n1 n2 = compare (tuplefy n1) (tuplefy n2)
+      where
+        tuplefy n =
+            (startSet n, stateSet n, alphabet n, accepting n, transitions n)
+
 instance (Arbitrary a, Ord a, Arbitrary s, Ord s) => Arbitrary (Nfa a s) where
     arbitrary = Prim <$> arbitrary
 
@@ -97,7 +104,35 @@ return' state =
                 | state <- (S.toList states)
                 , char <- [Nothing]
                 ]
-     in RawNfa S.empty states S.empty S.empty trans
+     in RawNfa states states S.empty states trans
+
+alterfunc key map Nothing =
+    case map M.!? key of
+        Nothing -> Just S.empty
+        x -> x
+alterfunc key map (Just set) = Just $ set `S.union` (map M.! key)
+
+innerExplode ::
+       forall c s. (Ord c, Ord s)
+    => Map (Set s, c) (Set s)
+    -> Map (s, c) (Set s)
+    -> (Set s, c)
+    -> Map (s, c) (Set s)
+innerExplode origMap map (keySet, char) =
+    M.unionWith
+        S.union
+        map
+        (S.foldl'
+             (\map' key ->
+                  M.alter (alterfunc (keySet, char) origMap) (key, char) map')
+             M.empty
+             keySet)
+
+explode ::
+       forall a t. (Ord a, Ord t)
+    => Map (Set t, a) (Set t)
+    -> Map (t, a) (Set t)
+explode map = foldl' (innerExplode map) M.empty $ M.keys map
 
 bind' ::
        forall a s t. (Ord a, Ord t)
@@ -105,12 +140,18 @@ bind' ::
     -> (s -> RawNfa a t)
     -> RawNfa a t
 oldNfa@(RawNfa starts states alphabet accepts trans) `bind'` f =
-    RawNfa starts' states' alphabet accepts' undefined
+    RawNfa starts' states' alphabet accepts' trans'
   where
-    mappedKeys :: Map (RawNfa a t, Maybe a) (Set s)
-    mappedKeys = M.mapKeys (\(state, char) -> (f state, char)) trans
-    innerTrans :: Map (RawNfa a t, Maybe a) (Set (RawNfa a t))
-    innerTrans = M.map (S.map f) mappedKeys
+    transMapVals :: Map (s, Maybe a) (RawNfa a t)
+    transMapVals = M.map (S.foldl' union' empty' . S.map f) trans
+    transMapped :: Map (RawNfa a t, Maybe a) (RawNfa a t)
+    transMapped = M.mapKeys (\(state, char) -> (f state, char)) transMapVals
+    transStartVals :: Map (RawNfa a t, Maybe a) (Set t)
+    transStartVals = M.map _startSet transMapped
+    transStarts :: Map (Set t, Maybe a) (Set t)
+    transStarts =
+        M.mapKeys (\(nfa, char) -> (_startSet nfa, char)) transStartVals
+    trans' = explode transStarts
     starts' :: Set t
     starts' =
         S.foldl'
@@ -120,15 +161,15 @@ oldNfa@(RawNfa starts states alphabet accepts trans) `bind'` f =
     states' :: Set t
     states' =
         S.foldl
-            (\set nfa -> set `S.union` _startSet nfa)
+            (\set nfa -> set `S.union` _stateSet nfa)
             S.empty
-            (S.map f starts)
+            (S.map f states)
     accepts' :: Set t
     accepts' =
         S.foldl'
-            (\set nfa -> set `S.union` _startSet nfa)
+            (\set nfa -> set `S.union` _accepting nfa)
             S.empty
-            (S.map f starts)
+            (S.map f accepts)
 
 union' :: (Ord a, Ord s) => RawNfa a s -> RawNfa a s -> RawNfa a s
 union' n1 n2 =
@@ -145,6 +186,9 @@ union' n1 n2 =
     alph = _alphabet n1 `S.union` _alphabet n2
     accepts = _accepting n1 `S.union` _accepting n2
     trans = M.unionWith S.union (_transitions n1) (_transitions n2)
+
+union :: (Ord a, Ord s) => Nfa a s -> Nfa a s -> Nfa a s
+union x y = Prim $ union' (run x) (run y)
 
 nfa :: Ord s
     => Set s

@@ -1,13 +1,14 @@
 module Main where
 
 import           Data.Maybe           (fromMaybe)
-import           Data.Nfa
 import           Data.Text            (Text, unpack)
 import           NfaAlg
 import           Parser.Nfa
 import           System.Environment   (getArgs, getProgName)
 import           Text.RawString.QQ
 import           Text.Trifecta.Parser (parseFromFile)
+
+import           Data.Nfa
 
 testNfa :: Text
 testNfa =

@@ -92,5 +92,4 @@ parseNfa = do
     return $ nfa (S.singleton 0) states alph accepting transitions
   --where
     --transitionLine :: Parser (Map (Maybe Char) (Set FiniteNat))
-    --transitionLine =
     --transitionTableList :: Parser (TransType Char FiniteNat)
