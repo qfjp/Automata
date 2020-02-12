@@ -1,15 +1,15 @@
 module Data.Nfa
-    ( Alphabetical(..)
-    , Nfa
+    ( Nfa
     , TransType
+    , bind'
     , accepting
     , alphabet
     , alphSize
     , nfa
     , notInFinal
     , numStates
+    , stateSet
     , printNfa
-    , stateList
     , startSet
     , transitions
     ) where
@@ -28,19 +28,13 @@ import           Test.QuickCheck.Gen       (choose, listOf, sublistOf)
 
 import           Debug.Trace               (traceShow, traceShowId)
 
-class Alphabetical a where
-    globalAlphabet :: [Maybe a]
-
-instance Alphabetical Char where
-    globalAlphabet = Nothing : (map Just "abcdefghijklmnopqrstuvwxyz")
-
 type TransType a s = Map (s, Maybe a) (Set s)
 
 data RawNfa a s =
     RawNfa
         { _startSet :: Set s
-        , _numStates :: Int
-        , _alphSize :: Int
+        , _stateSet :: Set s
+        , _alphabet :: Set (Maybe a)
         , _accepting :: Set s
         , _transitions :: TransType a s
         }
@@ -53,15 +47,16 @@ data Nfa a s where
     --Zero :: Nfa a s
     --Plus :: Nfa a s -> Nfa a s -> Nfa a s
 
-instance (Alphabetical a, Arbitrary a, Ord a, Arbitrary s, Enum s, Ord s) =>
+instance (Arbitrary a, Ord a, Arbitrary s, Bounded s, Enum s, Ord s) =>
          Arbitrary (RawNfa a s) where
     arbitrary = do
         let maxSize = 4
             minSize = 0
         numStates <- choose (0, 4)
         alphSize <- choose (0, 3)
-        let states = map toEnum [0 .. numStates - 1]
-            alphabet = take (1 + alphSize) globalAlphabet :: [Maybe a]
+        states <- take numStates <$> listOf arbitrary
+        alphabet' <- take alphSize <$> listOf arbitrary
+        let alphabet = Nothing : alphabet'
         startSet <- S.fromList <$> sublistOf states
         accepting <- S.fromList <$> sublistOf states
         let transitionKeys =
@@ -75,8 +70,8 @@ instance (Alphabetical a, Arbitrary a, Ord a, Arbitrary s, Enum s, Ord s) =>
         return
             RawNfa
                 { _startSet = startSet
-                , _numStates = numStates
-                , _alphSize = alphSize
+                , _stateSet = S.fromList states
+                , _alphabet = S.fromList alphabet
                 , _accepting = accepting
                 , _transitions = transitions
                 }
@@ -91,68 +86,81 @@ instance (Ord a, Show a, Bounded s, Enum s, Ord s, Show s) =>
 instance (Eq a, Ord a, Enum s, Eq s, Bounded s, Ord s) => Eq (Nfa a s) where
     x == y = (run x) == (run y)
 
-instance (Alphabetical a, Arbitrary a, Ord a, Arbitrary s, Enum s, Ord s) =>
+instance (Arbitrary a, Ord a, Arbitrary s, Bounded s, Enum s, Ord s) =>
          Arbitrary (Nfa a s) where
     arbitrary = Prim <$> arbitrary
 
-fmap' :: (Ord a, Ord t) => (s -> t) -> RawNfa a s -> RawNfa a t
-fmap' f (RawNfa starts nStates aSize accepts trans) =
-    let updatedKeys = M.mapKeys (\(state, char) -> (f state, char)) trans
-        updatedVals = M.map (S.map f) updatedKeys
-     in RawNfa (S.map f starts) nStates aSize (S.map f accepts) updatedVals
-
 return' :: (Ord a, Bounded s, Enum s, Ord s) => s -> RawNfa a s
 return' state =
-    let states = [toEnum 0 .. state]
+    let states = S.singleton state
         trans =
             M.fromList
-                [((state, char), S.empty) | state <- states, char <- [Nothing]]
-     in RawNfa (S.empty) (length states) 0 S.empty trans
+                [ ((state, char), S.empty)
+                | state <- (S.toList states)
+                , char <- [Nothing]
+                ]
+     in RawNfa S.empty states S.empty S.empty trans
 
-join' ::
-       forall a s. (Ord a, Enum s, Ord s, Enum s)
-    => RawNfa a (RawNfa a s)
-    -> RawNfa a s
-join' n@(RawNfa starts' nStates' aSize' accepts' trans') =
-    outerNfa `union'` foldl' union' empty' nfas
+bind' ::
+       forall a s t. (Enum t, Ord a, Ord t)
+    => RawNfa a s
+    -> (s -> RawNfa a t)
+    -> RawNfa a t
+oldNfa@(RawNfa starts nStates aSize accepts trans) `bind'` f = undefined
   where
-    nfas :: Set (RawNfa a s)
-    nfas = S.map fst $ M.keysSet trans'
-    labels = map toEnum [0 ..]
-    nfaMapping = M.fromList (zip (S.toList nfas) labels)
-    outerNfa = fmap' (nfaMapping M.!) n
-
-s `bind'` f = join' (fmap' f s)
+    mappedKeys :: Map (RawNfa a t, Maybe a) (Set s)
+    mappedKeys = M.mapKeys (\(state, char) -> (f state, char)) trans
+    innerTrans :: Map (RawNfa a t, Maybe a) (Set (RawNfa a t))
+    innerTrans = M.map (S.map f) mappedKeys
+    starts' :: Set t
+    starts' =
+        S.foldl'
+            (\set nfa -> set `S.union` _startSet nfa)
+            S.empty
+            (S.map f starts)
+    accepts' :: Set t
+    accepts' =
+        S.foldl'
+            (\set nfa -> set `S.union` _startSet nfa)
+            S.empty
+            (S.map f starts)
+    --join' (fmap' f s)
 
 union' :: (Ord a, Ord s) => RawNfa a s -> RawNfa a s -> RawNfa a s
 union' n1 n2 =
     RawNfa
         { _startSet = starts
-        , _numStates = numStates
-        , _alphSize = aSize
+        , _stateSet = states
+        , _alphabet = alph
         , _accepting = accepts
         , _transitions = trans
         }
   where
     starts = _startSet n1 `S.union` _startSet n2
-    numStates = max (_numStates n1) (_numStates n2)
-    aSize = max (_alphSize n1) (_alphSize n2)
+    states = _stateSet n1 `S.union` _stateSet n2
+    alph = _alphabet n1 `S.union` _alphabet n2
     accepts = _accepting n1 `S.union` _accepting n2
     trans = M.unionWith S.union (_transitions n1) (_transitions n2)
 
-nfa :: Ord s => Set s -> Int -> Int -> Set s -> TransType a s -> Nfa a s
-nfa starts numStates aSize accepts trans =
+nfa :: Ord s
+    => Set s
+    -> Set s
+    -> Set (Maybe a)
+    -> Set s
+    -> TransType a s
+    -> Nfa a s
+nfa starts states alph accepts trans =
     Prim $
     RawNfa
         { _startSet = starts
-        , _numStates = numStates
-        , _alphSize = aSize
+        , _stateSet = states
+        , _alphabet = alph
         , _accepting = accepts
         , _transitions = trans
         }
 
 empty' :: (Ord s) => RawNfa a s
-empty' = RawNfa S.empty 0 0 S.empty M.empty
+empty' = RawNfa S.empty S.empty S.empty S.empty M.empty
 
 empty :: (Ord s) => Nfa a s
 empty = Prim empty'
@@ -160,15 +168,18 @@ empty = Prim empty'
 run :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> RawNfa a s
 run (Prim s) = s
 run (Return s) = return' s
-run (Bind (Prim s) f) = join' (fmap' (run . f) s)
+--run (Bind (Prim s) f) = join' (fmap' (run . f) s)
 run (Bind (Return a) f) = run (f a)
 run (Bind (Bind ma f) g) = run (Bind ma (\a -> Bind (f a) g))
 
-numStates :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Int
-numStates = _numStates . run
+stateSet :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s
+stateSet = _stateSet . run
+
+alphabet :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set (Maybe a)
+alphabet = _alphabet . run
 
 alphSize :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Int
-alphSize = _alphSize . run
+alphSize = (\x -> x - 1) . S.size . alphabet
 
 accepting :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s
 accepting = _accepting . run
@@ -190,15 +201,14 @@ instance Monad (Nfa a) where
     return = Return
     (>>=) = Bind
 
-alphabet ::
-       (Alphabetical a, Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> [Maybe a]
-alphabet n = take (1 + alphSize n) globalAlphabet
-
+--alphabet ::
+--       (Alphabetical a, Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> [Maybe a]
+--alphabet n = take (1 + alphSize n) globalAlphabet
 stateList :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> [s]
 stateList n = map toEnum [0 .. (numStates n - 1)]
 
-stateSet :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s
-stateSet = S.fromList . stateList
+numStates :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Int
+numStates = S.size . stateSet
 
 notInFinal :: (Ord a, Bounded s, Enum s, Ord s) => Nfa a s -> Set s
 notInFinal n = (S.fromList (stateList n)) `S.difference` (accepting n)
@@ -213,8 +223,12 @@ sepList sep l =
 
 printTransitions :: (Bounded s, Enum s, Ord s, Show s) => Nfa Char s -> [String]
 printTransitions n =
-    let keys = [(q, a) | q <- stateList n, a <- alphabet n]
-        sets' = [(transitions n) M.! (q, a) | q <- stateList n, a <- alphabet n]
+    let keys = [(q, a) | q <- stateList n, a <- (S.toList . alphabet $ n)]
+        sets' =
+            [ (transitions n) M.! (q, a)
+            | q <- stateList n
+            , a <- (S.toList . alphabet $ n)
+            ]
         sets = map ((transitions n) M.!) keys
         setLines = groupBy (1 + alphSize n) (map printSet sets)
      in map unwords setLines
@@ -234,7 +248,7 @@ printNfa n =
     (show $ numStates n) ++
     "\n" ++
     "Alphabet size: " ++
-    (show $ alphSize n) ++
+    (show . alphSize $ n) ++
     "\n" ++
     "Accepting states: " ++
     (sepList " " . S.toList . accepting $ n) ++

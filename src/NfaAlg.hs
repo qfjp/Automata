@@ -1,5 +1,6 @@
 module NfaAlg
     ( epsilonRemoval
+    , simulate'
     , simulate
     , updateTrans
     ) where
@@ -48,19 +49,19 @@ simulate' str nfa =
     foldl' (\set char -> readCharOnSet set (Just char) nfa) (startSet nfa) str
 
 epsilonRemoval ::
-       forall a s. (Alphabetical a, Ord a, Bounded s, Enum s, Ord s)
+       forall a s. (Ord a, Bounded s, Enum s, Ord s)
     => Nfa a s
     -> Nfa a s
 epsilonRemoval n =
     let newAccepts = fixWith (updateF n) (accepting n)
         newTrans = fixWith (updateTrans n) (transitions n)
-        epsKeys = zip (stateList n) (repeat Nothing)
+        epsKeys = zip (S.toList $ stateSet n) (repeat Nothing)
         emptyEps =
             foldl'
                 (\map key -> M.adjust (const S.empty) key map)
                 newTrans
                 epsKeys
-     in nfa (startSet n) (numStates n) (alphSize n) newAccepts emptyEps
+     in nfa (startSet n) (stateSet n) (alphabet n) newAccepts emptyEps
 
 pureTrans :: (Ord a, Enum s, Ord s) => TransType a s -> s -> Maybe a -> Set s
 pureTrans trans state char = trans M.! (state, char)
@@ -77,15 +78,15 @@ updateF nfa accepts =
         foldl' (\set state -> set `S.union` S.singleton state) S.empty qs
 
 updateTrans ::
-       (Alphabetical a, Ord a, Bounded s, Enum s, Ord s)
+       (Ord a, Bounded s, Enum s, Ord s)
     => Nfa a s
     -> TransType a s
     -> TransType a s
 updateTrans nfa trans =
     let qASs =
             [ ((q, a), s)
-            | q <- stateList nfa
-            , a <- alphabet nfa
+            | q <- S.toList $ stateSet nfa
+            , a <- S.toList $ alphabet nfa
             , r <- S.toList $ pureTrans trans q Nothing
             , s <- S.toList $ pureTrans trans r a
             , s `S.notMember` pureTrans trans q a

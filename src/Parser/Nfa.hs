@@ -70,21 +70,27 @@ parseNfa :: Parser (Nfa Char FiniteNat)
 parseNfa = do
     text "Number of states: "
     numStates <- smallInt
+    let states = S.fromList $ take numStates [minBound ..]
     newline'
     text "Alphabet size: "
     alphSize <- smallInt
+    let alph = S.fromList $ Nothing : (map Just . take alphSize $ ['a' ..])
+        transitionLine =
+            M.fromList <$> zip (S.toList alph) <$>
+            sepBy1 (parseSet smallNat) spaces
+        transitionTableList = do
+            indexedMaps <-
+                zip [0 ..] <$> sepBy1 (transitionLine <|> eof') (newline)
+            let stateMaps =
+                    map (\(state, m) -> M.mapKeys (state, ) m) indexedMaps
+            return $ foldr M.union M.empty stateMaps
     newline'
     text "Accepting states: "
     accepting <- S.fromList <$> sepBy smallNat spaces
     newline'
     transitions <- transitionTableList
-    return $ nfa (S.singleton 0) numStates alphSize accepting transitions
-  where
-    transitionLine :: Parser (Map (Maybe Char) (Set FiniteNat))
-    transitionLine =
-        M.fromList <$> zip globalAlphabet <$> sepBy1 (parseSet smallNat) spaces
-    transitionTableList :: Parser (TransType Char FiniteNat)
-    transitionTableList = do
-        indexedMaps <- zip [0 ..] <$> sepBy1 (transitionLine <|> eof') (newline)
-        let stateMaps = map (\(state, m) -> M.mapKeys (state, ) m) indexedMaps
-        return $ foldr M.union M.empty stateMaps
+    return $ nfa (S.singleton 0) states alph accepting transitions
+  --where
+    --transitionLine :: Parser (Map (Maybe Char) (Set FiniteNat))
+    --transitionLine =
+    --transitionTableList :: Parser (TransType Char FiniteNat)
