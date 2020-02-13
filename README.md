@@ -1,1 +1,3 @@
-# NfaAssignment
+# Automata
+
+Experiments in Finite Automata

@@ -1,3 +1,3 @@
-# Changelog for NfaAssignment
+# Changelog for Automata
 
 ## Unreleased changes
