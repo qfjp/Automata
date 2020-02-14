@@ -19,16 +19,18 @@ import           Text.Parser.Token
 import           Text.Trifecta.Parser
 import           Text.Trifecta.Result
 
-import           Data.FiniteNat
+import           Data.LatinChar
+import           Data.Naturals
 import           Data.Nfa
+import qualified Data.Total              as To
 
-eof' :: Parser (Map (Maybe Char) (Set FiniteNat))
+eof' :: Parser (Map (Maybe LatinChar) (Set SmallNat))
 eof' = eof >> return M.empty
 
 newline' :: Parser String
 newline' = newline >> return "\n"
 
-smallNat :: Parser FiniteNat
+smallNat :: Parser SmallNat
 smallNat = read <$> some digit
 
 smallInt :: Parser Int
@@ -66,15 +68,16 @@ parseSet p = do
     string "}"
     return result
 
-parseNfa :: Parser (Nfa Char FiniteNat)
+parseNfa :: Parser (Nfa LatinChar SmallNat)
 parseNfa = do
     text "Number of states: "
     numStates <- smallInt
-    let states = S.fromList $ take numStates [minBound ..]
+    let states = S.fromList $ take numStates (iterate succ minBound)
     newline'
     text "Alphabet size: "
     alphSize <- smallInt
-    let alph = S.fromList $ Nothing : (map Just . take alphSize $ ['a' ..])
+    let alph =
+            S.fromList $ Nothing : (map Just . take alphSize $ [latChr 'a' ..])
         transitionLine =
             M.fromList <$> zip (S.toList alph) <$>
             sepBy1 (parseSet smallNat) spaces
@@ -89,7 +92,7 @@ parseNfa = do
     accepting <- S.fromList <$> sepBy smallNat spaces
     newline'
     transitions <- transitionTableList
-    return $ nfa (S.singleton 0) states alph accepting transitions
+    return $ nfa (S.singleton 0) states alph accepting (To.fromMap transitions)
   --where
-    --transitionLine :: Parser (Map (Maybe Char) (Set FiniteNat))
-    --transitionTableList :: Parser (TransType Char FiniteNat)
+    --transitionLine :: Parser (Map (Maybe Char) (Set SmallNat))
+    --transitionTableList :: Parser (TransType Char SmallNat)

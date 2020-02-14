@@ -8,7 +8,13 @@ import           System.Environment   (getArgs, getProgName)
 import           Text.RawString.QQ
 import           Text.Trifecta.Parser (parseFromFile)
 
+import           Data.LatinChar
+import           Data.Naturals
 import           Data.Nfa
+import qualified Data.Total           as T
+
+import qualified Data.Map.Strict      as M
+import qualified Data.Set             as S
 
 testNfa :: Text
 testNfa =
@@ -46,7 +52,7 @@ simulationEngine fpath = do
         case maybNfa of
             Nothing -> return ()
             Just nfa -> do
-                strings <- lines <$> getContents
+                strings <- map (map latChr) . lines <$> getContents
                 let results =
                         map
                             (\s ->

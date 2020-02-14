@@ -12,6 +12,8 @@ import           Data.Nfa
 import           Data.Set        (Set)
 import qualified Data.Set        as S
 
+import qualified Data.Total      as T
+
 fixWith :: (Eq a) => (a -> a) -> a -> a
 fixWith f init =
     let x = f init
@@ -19,35 +21,65 @@ fixWith f init =
             then x
             else fixWith f x
 
-epsClosureState :: (Ord a, Ord s) => Nfa a s -> s -> Set s
-epsClosureState n state = S.insert state $ transitions n M.! (state, Nothing)
+epsClosureState ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Nfa a s
+    -> s
+    -> Set s
+epsClosureState n state = S.insert state $ transitions n T.$- (state, Nothing)
 
-epsClosureOnce :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
+epsClosureOnce ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Nfa a s
+    -> Set s
+    -> Set s
 epsClosureOnce n = S.foldl' (\epsClos state -> epsClosureState n state) S.empty
 
-epsClosure :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
+epsClosure ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Nfa a s
+    -> Set s
+    -> Set s
 epsClosure n = fixWith (\s -> s `S.union` epsClosureOnce n s)
 
-readChar :: (Ord a, Ord s) => s -> Maybe a -> Nfa a s -> Set s
+readChar ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => s
+    -> Maybe a
+    -> Nfa a s
+    -> Set s
 readChar state = readCharOnSet (S.singleton state)
 
-readCharOnSet :: (Ord a, Ord s) => Set s -> Maybe a -> Nfa a s -> Set s
+readCharOnSet ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Set s
+    -> Maybe a
+    -> Nfa a s
+    -> Set s
 readCharOnSet states' char nfa =
     close $ S.foldl (\set state -> set `S.union` readOne state) S.empty states
   where
-    readOne state = (transitions nfa) M.! (state, char)
+    readOne state = (transitions nfa) T.$- (state, char)
     close = epsClosure nfa
     states = close states'
 
-simulate :: (Ord a, Ord s) => [a] -> Nfa a s -> Bool
+simulate ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => [a]
+    -> Nfa a s
+    -> Bool
 simulate s n = not . null $ simulate' s n `S.intersection` accepting n
 
-simulate' :: (Ord a, Ord s) => [a] -> Nfa a s -> Set s
+simulate' ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => [a]
+    -> Nfa a s
+    -> Set s
 simulate' str nfa =
     foldl' (\set char -> readCharOnSet set (Just char) nfa) (startSet nfa) str
 
 epsilonRemoval ::
-       forall a s. (Ord a, Ord s)
+       forall a s. (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
     => Nfa a s
     -> Nfa a s
 epsilonRemoval n =
@@ -57,14 +89,22 @@ epsilonRemoval n =
         emptyEps =
             foldl'
                 (\map key -> M.adjust (const S.empty) key map)
-                newTrans
+                (T.toMap newTrans)
                 epsKeys
-     in nfa (startSet n) (stateSet n) (alphabet n) newAccepts emptyEps
+     in nfa (startSet n)
+            (stateSet n)
+            (alphabet n)
+            newAccepts
+            (T.fromMap emptyEps)
 
 pureTrans :: (Ord a, Ord s) => TransType a s -> s -> Maybe a -> Set s
-pureTrans trans state char = trans M.! (state, char)
+pureTrans trans state char = trans T.$- (state, char)
 
-updateF :: (Ord a, Ord s) => Nfa a s -> Set s -> Set s
+updateF ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Nfa a s
+    -> Set s
+    -> Set s
 updateF nfa accepts =
     let qs =
             [ q
@@ -75,7 +115,11 @@ updateF nfa accepts =
      in accepts `S.union`
         foldl' (\set state -> set `S.union` S.singleton state) S.empty qs
 
-updateTrans :: (Ord a, Ord s) => Nfa a s -> TransType a s -> TransType a s
+updateTrans ::
+       (Bounded a, Enum a, Ord a, Bounded s, Enum s, Ord s)
+    => Nfa a s
+    -> TransType a s
+    -> TransType a s
 updateTrans nfa trans =
     let qASs =
             [ ((q, a), s)
@@ -85,7 +129,8 @@ updateTrans nfa trans =
             , s <- S.toList $ pureTrans trans r a
             , s `S.notMember` pureTrans trans q a
             ]
-     in foldl'
+     in T.fromMap $
+        foldl'
             (\map (key, s) -> M.adjust (S.union (S.singleton s)) key map)
-            trans
+            (T.toMap trans)
             qASs
