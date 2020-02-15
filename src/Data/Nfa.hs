@@ -195,8 +195,6 @@ oldNfa@(RawNfa starts states alphabet accepts trans) `bind'` f =
             S.empty
             (S.map f accepts)
 
-    -> RawNfa a s
-
 union' :: (Ord a, Ord s) => RawNfa a s -> RawNfa a s -> RawNfa a s
 union' n1 n2 =
     RawNfa
@@ -246,8 +244,7 @@ empty = Prim empty'
 run :: (Ord a, Ord s) => Nfa a s -> RawNfa a s
 run (Prim s) = s
 run (Return s) = return' s
---run (Bind (Prim s) f) = join' (fmap' (run . f) s)
---run (Bind (Prim s) f) = s `bind'` (run . f)
+run (Bind (Prim s) f) = s `bind'` (run . f)
 run (Bind (Return a) f) = run (f a)
 run (Bind (Bind ma f) g) = run (Bind ma (\a -> Bind (f a) g))
 
