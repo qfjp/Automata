@@ -3,9 +3,14 @@ module Data.LatinChar
     , latChr
     ) where
 
+import           Test.QuickCheck.Arbitrary (Arbitrary(..))
+
 data LatinChar =
     LatinChar Char
     deriving (Eq, Ord)
+
+instance Arbitrary LatinChar where
+    arbitrary = latChr <$> arbitrary
 
 instance Show LatinChar where
     show (LatinChar x) = show x
